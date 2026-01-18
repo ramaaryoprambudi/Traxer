@@ -138,29 +138,31 @@ const swaggerOptions = {
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
-// Security middleware
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "https:"],
-        },
-    },
-    hsts: {
-        maxAge: 31536000,
-        includeSubDomains: true,
-        preload: true
-    }
-}));
+// Security middleware - Conditional CSP for production
+if (process.env.NODE_ENV === 'production') {
+    app.use(helmet({
+        contentSecurityPolicy: false, // Disable CSP for Swagger UI to work
+        hsts: {
+            maxAge: 31536000,
+            includeSubDomains: true,
+            preload: true
+        }
+    }));
+} else {
+    app.use(helmet({
+        contentSecurityPolicy: false, // Disable CSP in development
+        hsts: false
+    }));
+}
 
 // CORS configuration
 app.use(cors({
-  origin: ['https://traxer-three.vercel.app'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  origin: ['https://traxer-three.vercel.app', 'http://localhost:3000', 'http://localhost:3001', 'https://traxer-three.vercel.app'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
 
 
@@ -218,7 +220,8 @@ app.get('/health', (req, res) => {
 });
 
 // Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs, {
+app.use('/api-docs', swaggerUi.serve);
+app.get('/api-docs', swaggerUi.setup(swaggerDocs, {
     customCss: `
         .swagger-ui .topbar { display: none }
         .swagger-ui .info { margin-bottom: 30px }
@@ -240,178 +243,107 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs, {
         .auto-auth-info .error { color: #f44336; font-weight: bold; }
     `,
     customSiteTitle: "📱 Habit Tracker API Documentation",
-    customfavIcon: "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNCIgZmlsbD0iIzQ5Y2M5MCIvPgo8cGF0aCBkPSJNOCAxNmw0IDQgOC04IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIuNSIgZmlsbD0ibm9uZSIvPgo8L3N2Zz4K",
+    customfavIcon: "/favicon.ico",
     swaggerOptions: {
         persistAuthorization: true,
         tryItOutEnabled: true,
         filter: true,
-        displayRequestDuration: true
-    },
-    customJs: `
-        // Auto-authentication handler
-        window.addEventListener('DOMContentLoaded', function() {
-            // Add info banner
+        displayRequestDuration: true,
+        deepLinking: true,
+        displayOperationId: false,
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 1,
+        defaultModelRendering: 'example',
+        docExpansion: 'list',
+        operationsSorter: 'alpha',
+        supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'],
+        onComplete: function() {
+            console.log('🚀 Swagger UI loaded successfully!');
+        }
+    }
+}));
+
+// Auto-authentication script endpoint
+app.get('/api-docs/auto-auth.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.send(`
+        // Auto-authentication for Swagger UI
+        console.log('🤖 Auto-auth script loaded');
+        
+        // Wait for page to be ready
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 DOM loaded, initializing auto-auth');
+            initAutoAuth();
+        });
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initAutoAuth);
+        } else {
+            initAutoAuth();
+        }
+        
+        function initAutoAuth() {
+            // Add banner
             setTimeout(function() {
-                const infoDiv = document.createElement('div');
-                infoDiv.className = 'auto-auth-info';
-                infoDiv.innerHTML = \`
-                    <div>🤖 <strong>Auto-Authentication Enabled!</strong></div>
-                    <div style="margin-top: 8px; font-size: 14px;">Register atau Login akan otomatis mengatur token authentication</div>
-                \`;
-                
-                const infoSection = document.querySelector('.information-container');
-                if (infoSection) {
-                    infoSection.appendChild(infoDiv);
-                }
-            }, 1000);
-
-            // Function to auto-authorize with token
-            function autoAuthorize(token) {
                 try {
-                    // Get Swagger UI instance
-                    const ui = window.ui;
-                    if (ui && ui.authActions) {
-                        // Set authorization
-                        ui.authActions.authorize({
-                            BearerAuth: {
-                                name: "BearerAuth",
-                                schema: {
-                                    type: "http",
-                                    scheme: "bearer",
-                                    bearerFormat: "JWT"
-                                },
-                                value: token
-                            }
-                        });
-                        
-                        // Show success message
-                        showAuthMessage('✅ Token berhasil diset otomatis!', 'success');
-                        
-                        // Update authorize button text
-                        setTimeout(() => {
-                            const authBtn = document.querySelector('.btn.authorize');
-                            if (authBtn) {
-                                authBtn.innerHTML = '🔓 Authorized';
-                                authBtn.style.backgroundColor = '#4CAF50';
-                            }
-                        }, 500);
-                        
-                        console.log('🤖 Auto-authorization successful with token:', token.substring(0, 20) + '...');
-                    }
-                } catch (error) {
-                    console.error('❌ Auto-authorization failed:', error);
-                    showAuthMessage('❌ Gagal set token otomatis', 'error');
-                }
-            }
-
-            // Function to show auth message
-            function showAuthMessage(message, type) {
-                const banner = document.querySelector('.auto-auth-info');
-                if (banner) {
-                    const statusDiv = document.createElement('div');
-                    statusDiv.className = type;
-                    statusDiv.style.marginTop = '10px';
-                    statusDiv.innerHTML = message;
-                    banner.appendChild(statusDiv);
+                    const banner = document.createElement('div');
+                    banner.innerHTML = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin: 20px; text-align: center; font-weight: 500;"><div>🤖 <strong>Auto-Authentication Enabled!</strong></div><div style="margin-top: 8px; font-size: 14px;">Register atau Login akan otomatis set token</div></div>';
                     
-                    // Remove message after 5 seconds
-                    setTimeout(() => {
-                        statusDiv.remove();
-                    }, 5000);
+                    const info = document.querySelector('.information-container') || document.querySelector('.swagger-ui');
+                    if (info) {
+                        info.appendChild(banner);
+                    }
+                } catch(e) {
+                    console.log('Banner creation failed:', e);
                 }
-            }
-
-            // Intercept XHR responses for auth endpoints
-            const originalXHROpen = XMLHttpRequest.prototype.open;
-            const originalXHRSend = XMLHttpRequest.prototype.send;
+            }, 2000);
             
-            XMLHttpRequest.prototype.open = function(method, url, ...args) {
-                this._method = method;
-                this._url = url;
-                return originalXHROpen.call(this, method, url, ...args);
-            };
-            
+            // Monitor XHR for auth responses
+            const originalXHR = XMLHttpRequest.prototype.send;
             XMLHttpRequest.prototype.send = function(data) {
                 const xhr = this;
-                
-                // Add response handler
                 xhr.addEventListener('load', function() {
                     try {
-                        // Check if this is a register or login request
-                        if (xhr._url && (xhr._url.includes('/auth/register') || xhr._url.includes('/auth/login'))) {
+                        if (xhr.responseURL && (xhr.responseURL.includes('/auth/register') || xhr.responseURL.includes('/auth/login'))) {
                             if (xhr.status >= 200 && xhr.status < 300) {
                                 const response = JSON.parse(xhr.responseText);
-                                
-                                // Check if response has token
                                 if (response.success && response.data && response.data.token) {
-                                    const token = response.data.token;
-                                    console.log('🎯 Detected auth response, auto-setting token...');
-                                    
-                                    // Auto-authorize after a short delay
-                                    setTimeout(() => {
-                                        autoAuthorize(token);
-                                    }, 500);
+                                    console.log('🎯 Token detected, auto-setting...');
+                                    setTimeout(() => setAuth(response.data.token), 1000);
                                 }
                             }
                         }
-                    } catch (error) {
-                        console.log('Response processing error:', error);
+                    } catch(e) {
+                        console.log('XHR processing error:', e);
                     }
                 });
-                
-                return originalXHRSend.call(this, data);
+                return originalXHR.call(this, data);
             };
-
-            // Intercept fetch requests as backup
-            const originalFetch = window.fetch;
-            window.fetch = function(url, options = {}) {
-                return originalFetch(url, options).then(response => {
-                    // Check if this is an auth endpoint response
-                    if (response.ok && (url.includes('/auth/register') || url.includes('/auth/login'))) {
-                        response.clone().json().then(data => {
-                            if (data.success && data.data && data.data.token) {
-                                const token = data.data.token;
-                                console.log('🎯 Detected fetch auth response, auto-setting token...');
-                                
-                                setTimeout(() => {
-                                    autoAuthorize(token);
-                                }, 500);
+            
+            function setAuth(token) {
+                try {
+                    if (window.ui && window.ui.authActions) {
+                        window.ui.authActions.authorize({
+                            BearerAuth: { value: token }
+                        });
+                        console.log('✅ Auto-auth successful!');
+                        
+                        // Update button
+                        setTimeout(() => {
+                            const btn = document.querySelector('.btn.authorize');
+                            if (btn) {
+                                btn.textContent = '🔓 Authorized';
+                                btn.style.backgroundColor = '#4CAF50';
                             }
-                        }).catch(() => {
-                            // Ignore parsing errors
-                        });
+                        }, 500);
                     }
-                    return response;
-                });
-            };
-
-            // Wait for Swagger UI to be fully loaded
-            let checkSwaggerUI = setInterval(function() {
-                if (window.ui && window.ui.authActions) {
-                    clearInterval(checkSwaggerUI);
-                    console.log('🚀 Swagger UI loaded, auto-auth ready!');
-                    
-                    // Add click handlers to Try It Out buttons for auth endpoints
-                    setTimeout(function() {
-                        const tryItButtons = document.querySelectorAll('.try-out__btn');
-                        tryItButtons.forEach(btn => {
-                            btn.addEventListener('click', function() {
-                                // Check if this is an auth endpoint
-                                const operationDiv = btn.closest('.opblock');
-                                if (operationDiv) {
-                                    const pathSpan = operationDiv.querySelector('.opblock-summary-path span');
-                                    if (pathSpan && (pathSpan.textContent.includes('/auth/register') || pathSpan.textContent.includes('/auth/login'))) {
-                                        console.log('🎯 Auth endpoint Try It Out clicked');
-                                    }
-                                }
-                            });
-                        });
-                    }, 2000);
+                } catch(e) {
+                    console.error('❌ Auto-auth failed:', e);
                 }
-            }, 100);
-        });
-    `
-}));
+            }
+        }
+    `);
+});
 
 
 
