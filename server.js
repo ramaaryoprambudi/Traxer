@@ -3,10 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const bodyParser = require('body-parser');
-const fs = require('fs');
-const path = require('path');
-const swaggerJsDoc = require('swagger-jsdoc');
-const swaggerUi = require('swagger-ui-express');
 
 const { testConnection } = require('./config/database');
 const { sanitizeInput } = require('./middleware/validation');
@@ -20,152 +16,24 @@ const logRoutes = require('./routes/logRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Swagger configuration
-const swaggerOptions = {
-    definition: {
-        openapi: '3.0.0',
-        info: {
-            title: '📱 Habit Tracker API',
-            version: '1.0.0',
-            description: 'Complete API documentation for mobile app developers to integrate with the Habit Tracker backend.',
-            contact: {
-                name: 'Habit Tracker API Support',
-                email: 'support@habittracker.com'
-            },
-            servers: [
-                {
-                    url: 'https://traxer-three.vercel.app',
-                    description: 'Production server'
-                },
-                {
-                    url: 'http://localhost:3000',
-                    description: 'Development server'
-                }
-            ]
+// Security middleware - Standard helmet setup
+app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
+        directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            imgSrc: ["'self'", "data:", "https:"],
         },
-        servers: [
-            {
-                url: 'https://traxer-three.vercel.app',
-                description: 'Production server'
-            },
-            {
-                url: 'http://localhost:3000',
-                description: 'Development server'
-            }
-        ],
-        components: {
-            securitySchemes: {
-                BearerAuth: {
-                    type: 'http',
-                    scheme: 'bearer',
-                    bearerFormat: 'JWT'
-                }
-            },
-            schemas: {
-                User: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'integer', example: 1 },
-                        name: { type: 'string', example: 'John Doe' },
-                        email: { type: 'string', example: 'john@example.com' },
-                        created_at: { type: 'string', format: 'date-time' },
-                        updated_at: { type: 'string', format: 'date-time' }
-                    }
-                },
-                Category: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'integer', example: 1 },
-                        name: { type: 'string', example: 'Health' },
-                        description: { type: 'string', example: 'Health related habits' },
-                        icon: { type: 'string', example: '💪' },
-                        color: { type: 'string', example: '#4CAF50' }
-                    }
-                },
-                Habit: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'integer', example: 1 },
-                        name: { type: 'string', example: 'Morning Exercise' },
-                        description: { type: 'string', example: '30 minutes workout' },
-                        category_id: { type: 'integer', example: 2 },
-                        frequency_type: { type: 'string', enum: ['daily', 'weekly', 'custom'], example: 'daily' },
-                        target_count: { type: 'integer', example: 1 },
-                        weekly_active_days: { type: 'array', items: { type: 'integer' }, example: [1, 2, 3, 4, 5] },
-                        is_active: { type: 'boolean', example: true },
-                        user_id: { type: 'integer', example: 1 },
-                        created_at: { type: 'string', format: 'date-time' }
-                    }
-                },
-                Log: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'integer', example: 1 },
-                        habit_id: { type: 'integer', example: 1 },
-                        date: { type: 'string', format: 'date', example: '2026-01-18' },
-                        completed_count: { type: 'integer', example: 1 },
-                        is_completed: { type: 'boolean', example: true },
-                        notes: { type: 'string', example: 'Great workout!' },
-                        created_at: { type: 'string', format: 'date-time' }
-                    }
-                },
-                Error: {
-                    type: 'object',
-                    properties: {
-                        success: { type: 'boolean', example: false },
-                        message: { type: 'string', example: 'Error message' },
-                        details: { type: 'string', example: 'Detailed error information' }
-                    }
-                },
-                Success: {
-                    type: 'object',
-                    properties: {
-                        success: { type: 'boolean', example: true },
-                        message: { type: 'string', example: 'Operation successful' },
-                        data: { type: 'object' }
-                    }
-                }
-            }
-        },
-        security: [
-            {
-                BearerAuth: []
-            }
-        ]
-    },
-    apis: ['./server.js', './routes/*.js']
-};
+    } : false
+}));
 
-const swaggerDocs = swaggerJsDoc(swaggerOptions);
-
-// Security middleware - Completely skip untuk semua swagger paths
-app.use((req, res, next) => {
-    // Skip ALL security untuk swagger dan static resources
-    if (req.path.includes('api-docs') || req.path.includes('swagger')) {
-        return next();
-    }
-    
-    // Apply helmet untuk non-swagger routes
-    helmet({
-        contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
-            directives: {
-                defaultSrc: ["'self'"],
-                styleSrc: ["'self'", "'unsafe-inline'"],
-                scriptSrc: ["'self'"],
-                imgSrc: ["'self'", "data:", "https:"],
-            },
-        } : false
-    })(req, res, next);
-});
-
-// CORS configuration - Permissive untuk Swagger UI
+// CORS configuration
 app.use(cors({
-  origin: true, // Allow semua origin untuk development
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 200
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 
 
@@ -184,35 +52,6 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-/**
- * @swagger
- * /health:
- *   get:
- *     tags:
- *       - Health Check
- *     summary: Check API health status
- *     description: Returns the current status of the API server
- *     responses:
- *       200:
- *         description: API is healthy
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   example: OK
- *                 timestamp:
- *                   type: string
- *                   format: date-time
- *                 environment:
- *                   type: string
- *                   example: production
- *                 version:
- *                   type: string
- *                   example: 1.0.0
- */
 app.get('/health', (req, res) => {
     res.status(200).json({
         status: 'OK',
@@ -222,32 +61,10 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Swagger UI - Completely disable all security for swagger routes
-app.use('/api-docs*', (req, res, next) => {
-    // Remove ALL security headers
-    res.removeHeader('Content-Security-Policy');
-    res.removeHeader('X-Content-Type-Options');
-    res.removeHeader('X-Frame-Options');
-    res.removeHeader('X-DNS-Prefetch-Control');
-    res.removeHeader('Cross-Origin-Resource-Policy');
-    res.removeHeader('Cross-Origin-Embedder-Policy');
-    
-    // Set permissive headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', '*');
-    res.setHeader('Access-Control-Allow-Headers', '*');
-    
-    next();
+// API Documentation - Simple HTML version
+app.get('/api-docs', (req, res) => {
+    res.redirect('/docs');
 });
-
-// Swagger UI setup dengan static file handling
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs, {
-    customSiteTitle: "📱 Habit Tracker API Documentation",
-    customfavIcon: "/favicon.ico",
-    swaggerOptions: {
-        persistAuthorization: true
-    }
-}));
 
 // Simple HTML docs sebagai backup jika Swagger gagal
 app.get('/docs', (req, res) => {
@@ -286,8 +103,8 @@ app.get('/docs', (req, res) => {
                 <h1>📱 Habit Tracker API</h1>
                 <p>Complete REST API Documentation</p>
                 <div style="margin-top: 20px;">
-                    <a href="/api-docs" class="btn">🔗 Try Swagger UI</a>
                     <a href="/health" class="btn">💖 Health Check</a>
+                    <a href="/docs" class="btn">📚 Documentation</a>
                 </div>
                 <div style="margin-top: 10px;">
                     <span class="status status-ok">Production: https://traxer-three.vercel.app</span>
@@ -422,7 +239,7 @@ app.get('/', (req, res) => {
         message: 'Habit Tracker API',
         version: '1.0.0',
         documentation: '/docs',
-        swagger: '/api-docs',
+        health: '/health',
         endpoints: {
             auth: '/api/auth (register, login, profile)',
             categories: '/api/categories',
