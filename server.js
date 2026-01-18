@@ -138,13 +138,14 @@ const swaggerOptions = {
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
-// Security middleware - Skip untuk /api-docs routes  
+// Security middleware - Completely skip untuk semua swagger paths
 app.use((req, res, next) => {
-    if (req.path.startsWith('/api-docs')) {
-        // Skip semua security untuk swagger
+    // Skip ALL security untuk swagger dan static resources
+    if (req.path.includes('api-docs') || req.path.includes('swagger')) {
         return next();
     }
     
+    // Apply helmet untuk non-swagger routes
     helmet({
         contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
             directives: {
@@ -221,72 +222,177 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Swagger UI - Fixed untuk production deployment
-app.use('/api-docs', 
-    (req, res, next) => {
-        // Bypass semua security checks untuk swagger resources
-        res.removeHeader('Content-Security-Policy');
-        res.removeHeader('X-Content-Type-Options');
-        res.removeHeader('X-Frame-Options');
-        next();
-    },
-    swaggerUi.serve,
-    swaggerUi.setup(swaggerDocs, {
-        customSiteTitle: "📱 Habit Tracker API Documentation"
-    })
-);
+// Swagger UI - Completely disable all security for swagger routes
+app.use('/api-docs*', (req, res, next) => {
+    // Remove ALL security headers
+    res.removeHeader('Content-Security-Policy');
+    res.removeHeader('X-Content-Type-Options');
+    res.removeHeader('X-Frame-Options');
+    res.removeHeader('X-DNS-Prefetch-Control');
+    res.removeHeader('Cross-Origin-Resource-Policy');
+    res.removeHeader('Cross-Origin-Embedder-Policy');
+    
+    // Set permissive headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    
+    next();
+});
 
-// Simplified auto-auth endpoint
-app.get('/swagger-auto-auth', (req, res) => {
-    res.setHeader('Content-Type', 'text/html');
+// Swagger UI setup dengan static file handling
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs, {
+    customSiteTitle: "📱 Habit Tracker API Documentation",
+    customfavIcon: "/favicon.ico",
+    swaggerOptions: {
+        persistAuthorization: true
+    }
+}));
+
+// Simple HTML docs sebagai backup jika Swagger gagal
+app.get('/docs', (req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(`
     <!DOCTYPE html>
     <html>
     <head>
-        <title>📱 Habit Tracker API</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>📱 Habit Tracker API</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-            .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .banner { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px; }
-            .btn { display: inline-block; padding: 12px 24px; background: #49cc90; color: white; text-decoration: none; border-radius: 6px; margin: 10px; }
-            .btn:hover { background: #3ea173; }
-            .section { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 6px; }
-            code { background: #e9ecef; padding: 2px 6px; border-radius: 3px; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.6; background: #f8f9fa; }
+            .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center; border-radius: 10px; margin-bottom: 30px; }
+            .section { background: white; padding: 25px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .endpoint { background: #f8f9fa; padding: 12px; margin: 8px 0; border-left: 4px solid #007acc; border-radius: 4px; }
+            .method { display: inline-block; padding: 3px 6px; color: white; font-weight: bold; border-radius: 3px; font-size: 11px; min-width: 50px; text-align: center; }
+            .method-get { background: #28a745; }
+            .method-post { background: #007bff; }
+            .method-put { background: #fd7e14; }
+            .method-delete { background: #dc3545; }
+            .url { font-family: 'Monaco', 'Menlo', monospace; font-weight: bold; margin-left: 10px; }
+            code { background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: 'Monaco', 'Menlo', monospace; }
+            pre { background: #2d3748; color: #e2e8f0; padding: 12px; border-radius: 5px; overflow-x: auto; font-size: 13px; }
+            .btn { display: inline-block; padding: 10px 20px; background: #007acc; color: white; text-decoration: none; border-radius: 6px; margin: 8px 8px 8px 0; transition: background 0.3s; }
+            .btn:hover { background: #005a99; }
+            .status { padding: 4px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
+            .status-ok { background: #d4edda; color: #155724; }
         </style>
     </head>
     <body>
         <div class="container">
-            <div class="banner">
+            <div class="header">
                 <h1>📱 Habit Tracker API</h1>
-                <p>Complete API documentation for mobile developers</p>
+                <p>Complete REST API Documentation</p>
+                <div style="margin-top: 20px;">
+                    <a href="/api-docs" class="btn">🔗 Try Swagger UI</a>
+                    <a href="/health" class="btn">💖 Health Check</a>
+                </div>
+                <div style="margin-top: 10px;">
+                    <span class="status status-ok">Production: https://traxer-three.vercel.app</span>
+                </div>
             </div>
-            
+
             <div class="section">
-                <h2>🚀 API Documentation</h2>
-                <p>Access interactive API documentation:</p>
-                <a href="/api-docs" class="btn">📚 Open Swagger UI</a>
-                <a href="/health" class="btn">💖 Health Check</a>
+                <h2>🔑 Authentication</h2>
+                <p><strong>All endpoints (except auth) require JWT token:</strong></p>
+                <pre>Authorization: Bearer {your_jwt_token}</pre>
+                
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="url">/api/auth/register</span>
+                    <p>Register new user - Returns JWT token</p>
+                    <pre>{"name": "John Doe", "email": "test@example.com", "password": "password123"}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="url">/api/auth/login</span>
+                    <p>Login existing user - Returns JWT token</p>
+                    <pre>{"email": "test@example.com", "password": "password123"}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="url">/api/auth/profile</span>
+                    <p>Get current user profile (requires auth)</p>
+                </div>
             </div>
-            
+
             <div class="section">
-                <h2>🔗 Endpoints</h2>
-                <ul>
-                    <li><strong>Authentication:</strong> <code>/api/auth</code></li>
-                    <li><strong>Categories:</strong> <code>/api/categories</code></li>
-                    <li><strong>Habits:</strong> <code>/api/habits</code></li>
-                    <li><strong>Logs:</strong> <code>/api/logs</code></li>
-                </ul>
+                <h2>📝 Habits Management</h2>
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="url">/api/habits</span>
+                    <p>Create new habit (requires auth)</p>
+                    <pre>{"name": "Morning Exercise", "description": "30min workout", "category_id": 2, "frequency_type": "daily"}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="url">/api/habits</span>
+                    <p>Get user habits with pagination (requires auth)</p>
+                    <p>Query params: <code>page=1</code>, <code>limit=10</code>, <code>category_id=2</code></p>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="url">/api/habits/:id</span>
+                    <p>Get specific habit by ID (requires auth)</p>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method method-put">PUT</span>
+                    <span class="url">/api/habits/:id</span>
+                    <p>Update habit (requires auth)</p>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method method-delete">DELETE</span>
+                    <span class="url">/api/habits/:id</span>
+                    <p>Delete habit (requires auth)</p>
+                </div>
             </div>
-            
+
             <div class="section">
-                <h2>🔑 Authentication Flow</h2>
-                <ol>
-                    <li>Register: <code>POST /api/auth/register</code></li>
-                    <li>Login: <code>POST /api/auth/login</code></li>
-                    <li>Use token in Authorization header: <code>Bearer {token}</code></li>
-                </ol>
+                <h2>✅ Habit Logs</h2>
+                <div class="endpoint">
+                    <span class="method method-post">POST</span>
+                    <span class="url">/api/logs</span>
+                    <p>Log habit completion (requires auth)</p>
+                    <pre>{"habit_id": 1, "date": "2026-01-18", "completed": true, "notes": "Great workout!"}</pre>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="url">/api/logs/today</span>
+                    <p>Get today's habit completion status (requires auth)</p>
+                </div>
+
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="url">/api/logs</span>
+                    <p>Get habit logs with date range (requires auth)</p>
+                    <p>Query params: <code>start_date=2026-01-01</code>, <code>end_date=2026-01-31</code></p>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📂 Categories</h2>
+                <div class="endpoint">
+                    <span class="method method-get">GET</span>
+                    <span class="url">/api/categories</span>
+                    <p>Get all available habit categories (requires auth)</p>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📱 Response Format</h2>
+                <p><strong>Success Response:</strong></p>
+                <pre>{"success": true, "message": "Operation successful", "data": {...}}</pre>
+                <p><strong>Error Response:</strong></p>
+                <pre>{"success": false, "message": "Error description", "details": "..."}</pre>
             </div>
         </div>
     </body>
@@ -303,11 +409,11 @@ app.use('/api/habits', habitRoutes);
 app.use('/api/logs', logRoutes);
 
 // Root endpoint
-// Root endpoint - Redirect ke landing page
+// Root endpoint - Redirect ke simple docs
 app.get('/', (req, res) => {
-    // Jika request dari browser, redirect ke landing page
+    // Jika request dari browser, redirect ke simple docs
     if (req.headers.accept && req.headers.accept.includes('text/html')) {
-        return res.redirect('/swagger-auto-auth');
+        return res.redirect('/docs');
     }
     
     // Jika API request, return JSON
@@ -315,8 +421,8 @@ app.get('/', (req, res) => {
         success: true,
         message: 'Habit Tracker API',
         version: '1.0.0',
-        documentation: '/api-docs',
-        landing: '/swagger-auto-auth',
+        documentation: '/docs',
+        swagger: '/api-docs',
         endpoints: {
             auth: '/api/auth (register, login, profile)',
             categories: '/api/categories',
