@@ -138,28 +138,23 @@ const swaggerOptions = {
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
-// Security middleware - Conditional CSP for production
-if (process.env.NODE_ENV === 'production') {
-    app.use(helmet({
-        contentSecurityPolicy: false, // Disable CSP for Swagger UI to work
-        hsts: {
-            maxAge: 31536000,
-            includeSubDomains: true,
-            preload: true
-        }
-    }));
-} else {
-    app.use(helmet({
-        contentSecurityPolicy: false, // Disable CSP in development
-        hsts: false
-    }));
-}
+// Security middleware - Disable untuk production Swagger UI
+app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+    hsts: process.env.NODE_ENV === 'production' ? {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    } : false
+}));
 
-// CORS configuration
+// CORS configuration - Permissive untuk Swagger UI
 app.use(cors({
-  origin: ['https://traxer-three.vercel.app', 'http://localhost:3000', 'http://localhost:3001', 'https://traxer-three.vercel.app'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  origin: true, // Allow semua origin untuk development
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   credentials: true,
   preflightContinue: false,
   optionsSuccessStatus: 200
@@ -219,129 +214,88 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Swagger UI
+// Swagger UI - Simplified setup
 app.use('/api-docs', swaggerUi.serve);
-app.get('/api-docs', swaggerUi.setup(swaggerDocs, {
-    customCss: `
-        .swagger-ui .topbar { display: none }
-        .swagger-ui .info { margin-bottom: 30px }
-        .swagger-ui .scheme-container { background: #fafafa; padding: 20px; border-radius: 5px }
-        .swagger-ui .btn.authorize { background-color: #49cc90; border-color: #49cc90 }
-        .swagger-ui .btn.authorize:hover { background-color: #3ea173; border-color: #3ea173 }
-        .swagger-ui .response-col_status { width: 10% }
-        .swagger-ui .response-col_description { width: 90% }
-        .auto-auth-info { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: center;
-            font-weight: 500;
+app.get('/api-docs', (req, res, next) => {
+    // Set proper headers untuk Swagger resources
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:;");
+    
+    swaggerUi.setup(swaggerDocs, {
+        customCss: `
+            .swagger-ui .topbar { display: none }
+            .swagger-ui .info { margin-bottom: 30px }
+            .swagger-ui .scheme-container { background: #fafafa; padding: 20px; border-radius: 5px }
+            .swagger-ui .btn.authorize { background-color: #49cc90; border-color: #49cc90 }
+            .swagger-ui .btn.authorize:hover { background-color: #3ea173; border-color: #3ea173 }
+        `,
+        customSiteTitle: "📱 Habit Tracker API Documentation",
+        swaggerOptions: {
+            persistAuthorization: true,
+            tryItOutEnabled: true,
+            filter: true,
+            displayRequestDuration: true,
+            docExpansion: 'list',
+            operationsSorter: 'alpha'
         }
-        .auto-auth-info .success { color: #4CAF50; font-weight: bold; }
-        .auto-auth-info .error { color: #f44336; font-weight: bold; }
-    `,
-    customSiteTitle: "📱 Habit Tracker API Documentation",
-    customfavIcon: "/favicon.ico",
-    swaggerOptions: {
-        persistAuthorization: true,
-        tryItOutEnabled: true,
-        filter: true,
-        displayRequestDuration: true,
-        deepLinking: true,
-        displayOperationId: false,
-        defaultModelsExpandDepth: 1,
-        defaultModelExpandDepth: 1,
-        defaultModelRendering: 'example',
-        docExpansion: 'list',
-        operationsSorter: 'alpha',
-        supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'],
-        onComplete: function() {
-            console.log('🚀 Swagger UI loaded successfully!');
-        }
-    }
-}));
+    })(req, res, next);
+});
 
-// Auto-authentication script endpoint
-app.get('/api-docs/auto-auth.js', (req, res) => {
-    res.setHeader('Content-Type', 'application/javascript');
+// Simplified auto-auth endpoint
+app.get('/swagger-auto-auth', (req, res) => {
+    res.setHeader('Content-Type', 'text/html');
     res.send(`
-        // Auto-authentication for Swagger UI
-        console.log('🤖 Auto-auth script loaded');
-        
-        // Wait for page to be ready
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 DOM loaded, initializing auto-auth');
-            initAutoAuth();
-        });
-        
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initAutoAuth);
-        } else {
-            initAutoAuth();
-        }
-        
-        function initAutoAuth() {
-            // Add banner
-            setTimeout(function() {
-                try {
-                    const banner = document.createElement('div');
-                    banner.innerHTML = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin: 20px; text-align: center; font-weight: 500;"><div>🤖 <strong>Auto-Authentication Enabled!</strong></div><div style="margin-top: 8px; font-size: 14px;">Register atau Login akan otomatis set token</div></div>';
-                    
-                    const info = document.querySelector('.information-container') || document.querySelector('.swagger-ui');
-                    if (info) {
-                        info.appendChild(banner);
-                    }
-                } catch(e) {
-                    console.log('Banner creation failed:', e);
-                }
-            }, 2000);
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>📱 Habit Tracker API</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+            .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .banner { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px; }
+            .btn { display: inline-block; padding: 12px 24px; background: #49cc90; color: white; text-decoration: none; border-radius: 6px; margin: 10px; }
+            .btn:hover { background: #3ea173; }
+            .section { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 6px; }
+            code { background: #e9ecef; padding: 2px 6px; border-radius: 3px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="banner">
+                <h1>📱 Habit Tracker API</h1>
+                <p>Complete API documentation for mobile developers</p>
+            </div>
             
-            // Monitor XHR for auth responses
-            const originalXHR = XMLHttpRequest.prototype.send;
-            XMLHttpRequest.prototype.send = function(data) {
-                const xhr = this;
-                xhr.addEventListener('load', function() {
-                    try {
-                        if (xhr.responseURL && (xhr.responseURL.includes('/auth/register') || xhr.responseURL.includes('/auth/login'))) {
-                            if (xhr.status >= 200 && xhr.status < 300) {
-                                const response = JSON.parse(xhr.responseText);
-                                if (response.success && response.data && response.data.token) {
-                                    console.log('🎯 Token detected, auto-setting...');
-                                    setTimeout(() => setAuth(response.data.token), 1000);
-                                }
-                            }
-                        }
-                    } catch(e) {
-                        console.log('XHR processing error:', e);
-                    }
-                });
-                return originalXHR.call(this, data);
-            };
+            <div class="section">
+                <h2>🚀 API Documentation</h2>
+                <p>Access interactive API documentation:</p>
+                <a href="/api-docs" class="btn">📚 Open Swagger UI</a>
+                <a href="/health" class="btn">💖 Health Check</a>
+            </div>
             
-            function setAuth(token) {
-                try {
-                    if (window.ui && window.ui.authActions) {
-                        window.ui.authActions.authorize({
-                            BearerAuth: { value: token }
-                        });
-                        console.log('✅ Auto-auth successful!');
-                        
-                        // Update button
-                        setTimeout(() => {
-                            const btn = document.querySelector('.btn.authorize');
-                            if (btn) {
-                                btn.textContent = '🔓 Authorized';
-                                btn.style.backgroundColor = '#4CAF50';
-                            }
-                        }, 500);
-                    }
-                } catch(e) {
-                    console.error('❌ Auto-auth failed:', e);
-                }
-            }
-        }
+            <div class="section">
+                <h2>🔗 Endpoints</h2>
+                <ul>
+                    <li><strong>Authentication:</strong> <code>/api/auth</code></li>
+                    <li><strong>Categories:</strong> <code>/api/categories</code></li>
+                    <li><strong>Habits:</strong> <code>/api/habits</code></li>
+                    <li><strong>Logs:</strong> <code>/api/logs</code></li>
+                </ul>
+            </div>
+            
+            <div class="section">
+                <h2>🔑 Authentication Flow</h2>
+                <ol>
+                    <li>Register: <code>POST /api/auth/register</code></li>
+                    <li>Login: <code>POST /api/auth/login</code></li>
+                    <li>Use token in Authorization header: <code>Bearer {token}</code></li>
+                </ol>
+            </div>
+        </div>
+    </body>
+    </html>
     `);
 });
 
@@ -354,56 +308,20 @@ app.use('/api/habits', habitRoutes);
 app.use('/api/logs', logRoutes);
 
 // Root endpoint
-/**
- * @swagger
- * /:
- *   get:
- *     tags:
- *       - General
- *     summary: API information
- *     description: Get basic information about the Habit Tracker API
- *     responses:
- *       200:
- *         description: API information retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Habit Tracker API
- *                 version:
- *                   type: string
- *                   example: 1.0.0
- *                 documentation:
- *                   type: string
- *                   example: /api-docs
- *                 endpoints:
- *                   type: object
- *                   properties:
- *                     auth:
- *                       type: string
- *                       example: /api/auth (register, login, profile)
- *                     categories:
- *                       type: string
- *                       example: /api/categories
- *                     habits:
- *                       type: string
- *                       example: /api/habits
- *                     logs:
- *                       type: string
- *                       example: /api/logs
- */
+// Root endpoint - Redirect ke landing page
 app.get('/', (req, res) => {
+    // Jika request dari browser, redirect ke landing page
+    if (req.headers.accept && req.headers.accept.includes('text/html')) {
+        return res.redirect('/swagger-auto-auth');
+    }
+    
+    // Jika API request, return JSON
     res.status(200).json({
         success: true,
         message: 'Habit Tracker API',
         version: '1.0.0',
         documentation: '/api-docs',
+        landing: '/swagger-auto-auth',
         endpoints: {
             auth: '/api/auth (register, login, profile)',
             categories: '/api/categories',
