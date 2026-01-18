@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const bodyParser = require('body-parser');
+const fs = require('fs');
+const path = require('path');
 
 const { testConnection } = require('./config/database');
 const { sanitizeInput } = require('./middleware/validation');
@@ -35,13 +37,12 @@ app.use(helmet({
 
 // CORS configuration
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? ['https://yourdomain.com'] // Replace with your frontend domain in production
-        : ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+  origin: ['https://traxer-three.vercel.app'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
+
 
 // Body parsing middleware
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -65,6 +66,36 @@ app.get('/health', (req, res) => {
         environment: process.env.NODE_ENV || 'development',
         version: '1.0.0'
     });
+});
+
+// API Documentation endpoint
+app.get('/api/docs', (req, res) => {
+    try {
+        const docPath = path.join(__dirname, 'MOBILE_API_DOCUMENTATION.md');
+        
+        if (!fs.existsSync(docPath)) {
+            return res.status(404).json({
+                success: false,
+                message: 'Documentation not found'
+            });
+        }
+
+        const documentation = fs.readFileSync(docPath, 'utf8');
+        
+        // Set headers for proper markdown display
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', 'inline');
+        
+        res.send(documentation);
+        
+    } catch (error) {
+        console.error('Error serving documentation:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error loading documentation',
+            error: error.message
+        });
+    }
 });
 
 // API routes
@@ -173,6 +204,7 @@ async function startServer() {
             console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
             console.log(`🔗 API URL: http://localhost:${PORT}`);
             console.log(`💖 Health Check: http://localhost:${PORT}/health`);
+            console.log(`📚 Mobile API Docs: http://localhost:${PORT}/api/docs`);
             console.log('📋 API Endpoints:');
             console.log('   - POST   /api/auth/register');
             console.log('   - POST   /api/auth/login');
