@@ -82,14 +82,219 @@ app.get('/api/docs', (req, res) => {
 
         const documentation = fs.readFileSync(docPath, 'utf8');
         
-        // Set headers for proper markdown display
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Content-Disposition', 'inline');
+        // Check if client wants HTML format for better readability
+        const acceptHeader = req.headers.accept || '';
         
-        res.send(documentation);
+        if (acceptHeader.includes('text/html') || req.query.format === 'html') {
+            // Convert markdown to simple HTML for better viewing
+            const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habit Tracker API Documentation</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.6; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 6px; overflow-x: auto; border-left: 4px solid #007acc; }
+        code { background: #f1f3f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+        h1 { color: #1a1a1a; border-bottom: 2px solid #007acc; padding-bottom: 10px; }
+        h2 { color: #2c5aa0; margin-top: 30px; }
+        h3 { color: #5a6b7d; }
+        .endpoint { background: #e8f4fd; padding: 15px; border-radius: 6px; margin: 10px 0; border-left: 4px solid #1976d2; }
+        .method-get { color: #28a745; font-weight: bold; }
+        .method-post { color: #007bff; font-weight: bold; }
+        .method-put { color: #fd7e14; font-weight: bold; }
+        .method-delete { color: #dc3545; font-weight: bold; }
+        .json { background: #f8f9fa; border: 1px solid #e9ecef; }
+        ul li { margin: 5px 0; }
+        .back-to-top { position: fixed; bottom: 20px; right: 20px; background: #007acc; color: white; padding: 10px 15px; border: none; border-radius: 50px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <pre style="white-space: pre-wrap; font-family: inherit; background: transparent; border: none; padding: 0;">${documentation.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+    </div>
+    <button class="back-to-top" onclick="window.scrollTo(0,0)">↑ Top</button>
+</body>
+</html>`;
+            
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.send(htmlContent);
+        } else {
+            // Return as plain text markdown
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', 'inline');
+            res.send(documentation);
+        }
         
     } catch (error) {
         console.error('Error serving documentation:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error loading documentation',
+            error: error.message
+        });
+    }
+});
+
+// API Documentation as JSON for Postman
+app.get('/api/docs/postman', (req, res) => {
+    try {
+        res.status(200).json({
+            success: true,
+            message: "📱 Habit Tracker API Documentation for Mobile Apps",
+            data: {
+                title: "Habit Tracker API Documentation for Mobile Apps",
+                description: "Complete API documentation for mobile app developers to integrate with the Habit Tracker backend.",
+                base_url: "https://traxer-three.vercel.app",
+                api_url: "https://traxer-three.vercel.app/api",
+                health_check: "https://traxer-three.vercel.app/health",
+                authentication: {
+                    type: "Bearer Token (JWT)",
+                    header: "Authorization: Bearer {token}",
+                    token_expires: "7 days"
+                },
+                endpoints: {
+                    auth: {
+                        register: {
+                            method: "POST",
+                            url: "/api/auth/register",
+                            body: {
+                                name: "John Doe",
+                                email: "john@example.com", 
+                                password: "password123"
+                            }
+                        },
+                        login: {
+                            method: "POST",
+                            url: "/api/auth/login",
+                            body: {
+                                email: "john@example.com",
+                                password: "password123"
+                            }
+                        },
+                        profile: {
+                            method: "GET",
+                            url: "/api/auth/profile",
+                            headers: ["Authorization: Bearer {token}"]
+                        }
+                    },
+                    categories: {
+                        get_all: {
+                            method: "GET",
+                            url: "/api/categories",
+                            headers: ["Authorization: Bearer {token}"]
+                        }
+                    },
+                    habits: {
+                        create: {
+                            method: "POST", 
+                            url: "/api/habits",
+                            headers: ["Authorization: Bearer {token}", "Content-Type: application/json"],
+                            body: {
+                                name: "Morning Exercise",
+                                description: "30 minutes workout",
+                                category_id: 2,
+                                frequency_type: "daily",
+                                target_count: 1
+                            }
+                        },
+                        get_all: {
+                            method: "GET",
+                            url: "/api/habits",
+                            headers: ["Authorization: Bearer {token}"],
+                            query_params: ["page", "limit", "category_id", "frequency_type", "is_active"]
+                        },
+                        get_single: {
+                            method: "GET",
+                            url: "/api/habits/{id}",
+                            headers: ["Authorization: Bearer {token}"]
+                        },
+                        update: {
+                            method: "PUT",
+                            url: "/api/habits/{id}",
+                            headers: ["Authorization: Bearer {token}", "Content-Type: application/json"],
+                            body: {
+                                name: "Updated habit name",
+                                description: "Updated description",
+                                category_id: 2,
+                                is_active: true
+                            }
+                        },
+                        delete: {
+                            method: "DELETE",
+                            url: "/api/habits/{id}",
+                            headers: ["Authorization: Bearer {token}"]
+                        },
+                        statistics: {
+                            method: "GET",
+                            url: "/api/habits/statistics", 
+                            headers: ["Authorization: Bearer {token}"],
+                            query_params: ["period", "start_date", "end_date"]
+                        }
+                    },
+                    logs: {
+                        create: {
+                            method: "POST",
+                            url: "/api/logs",
+                            headers: ["Authorization: Bearer {token}", "Content-Type: application/json"],
+                            body: {
+                                habit_id: 1,
+                                date: "2026-01-18", 
+                                completed_count: 1,
+                                is_completed: true,
+                                notes: "Great workout!"
+                            }
+                        },
+                        get_all: {
+                            method: "GET",
+                            url: "/api/logs",
+                            headers: ["Authorization: Bearer {token}"],
+                            query_params: ["habit_id", "date", "start_date", "end_date", "page", "limit"]
+                        },
+                        today: {
+                            method: "GET", 
+                            url: "/api/logs/today",
+                            headers: ["Authorization: Bearer {token}"]
+                        },
+                        calendar: {
+                            method: "GET",
+                            url: "/api/logs/calendar",
+                            headers: ["Authorization: Bearer {token}"],
+                            query_params: ["month", "year"]
+                        },
+                        streaks: {
+                            method: "GET",
+                            url: "/api/logs/streaks",
+                            headers: ["Authorization: Bearer {token}"]
+                        }
+                    }
+                },
+                mobile_examples: {
+                    android: "Kotlin with Retrofit",
+                    ios: "Swift with URLSession", 
+                    react_native: "JavaScript with fetch"
+                },
+                testing_info: {
+                    postman_collection: "habit_tracker_postman_collection.json",
+                    health_check_url: "https://traxer-three.vercel.app/health",
+                    test_user: {
+                        email: "test@example.com",
+                        password: "password123"
+                    }
+                },
+                important_notes: {
+                    date_format: "YYYY-MM-DD",
+                    weekly_active_days: "Array [1-7] where 1=Monday, 7=Sunday",
+                    rate_limit: "100 requests per 15 minutes",
+                    token_expiry: "7 days"
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error serving Postman documentation:', error);
         res.status(500).json({
             success: false,
             message: 'Error loading documentation',
@@ -110,7 +315,11 @@ app.get('/', (req, res) => {
         success: true,
         message: 'Habit Tracker API',
         version: '1.0.0',
-        documentation: '/api/docs',
+        documentation: {
+            mobile_docs: '/api/docs',
+            mobile_docs_html: '/api/docs?format=html',
+            postman_friendly: '/api/docs/postman'
+        },
         endpoints: {
             auth: '/api/auth (register, login, profile)',
             categories: '/api/categories',
