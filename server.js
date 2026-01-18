@@ -1734,7 +1734,6 @@ GET /api/logs?start_date=2026-01-15&habit_id=15&limit=10</pre>
     </body>
     </html>
     `);
-});
 
 // API routes
 app.use('/api/auth', authRoutes);
