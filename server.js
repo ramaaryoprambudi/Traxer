@@ -138,40 +138,23 @@ const swaggerOptions = {
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
-// Security middleware - Minimal untuk Swagger UI compatibility
+// Security middleware - Skip untuk /api-docs routes  
 app.use((req, res, next) => {
-    // Disable security headers for api-docs routes
     if (req.path.startsWith('/api-docs')) {
-        res.removeHeader('Content-Security-Policy');
-        res.removeHeader('X-Content-Type-Options');
-        res.removeHeader('Cross-Origin-Resource-Policy');
-        res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+        // Skip semua security untuk swagger
+        return next();
     }
-    next();
-});
-
-// Apply helmet after the swagger bypass
-app.use('/api-docs', (req, res, next) => {
-    // Skip helmet for swagger routes
-    next();
-}, swaggerUi.serve);
-
-// For non-swagger routes, apply security
-app.use((req, res, next) => {
-    if (!req.path.startsWith('/api-docs')) {
-        helmet({
-            contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
-                directives: {
-                    defaultSrc: ["'self'"],
-                    styleSrc: ["'self'", "'unsafe-inline'"],
-                    scriptSrc: ["'self'"],
-                    imgSrc: ["'self'", "data:", "https:"],
-                },
-            } : false
-        })(req, res, next);
-    } else {
-        next();
-    }
+    
+    helmet({
+        contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
+            directives: {
+                defaultSrc: ["'self'"],
+                styleSrc: ["'self'", "'unsafe-inline'"],
+                scriptSrc: ["'self'"],
+                imgSrc: ["'self'", "data:", "https:"],
+            },
+        } : false
+    })(req, res, next);
 });
 
 // CORS configuration - Permissive untuk Swagger UI
@@ -238,19 +221,13 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Swagger UI dengan route yang lebih sederhana
+// Swagger UI - Fixed untuk production deployment
 app.use('/api-docs', 
     (req, res, next) => {
-        // Disable SEMUA security headers untuk swagger
+        // Bypass semua security checks untuk swagger resources
         res.removeHeader('Content-Security-Policy');
         res.removeHeader('X-Content-Type-Options');
         res.removeHeader('X-Frame-Options');
-        res.removeHeader('X-DNS-Prefetch-Control');
-        res.removeHeader('X-Download-Options');
-        res.removeHeader('X-Permitted-Cross-Domain-Policies');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', '*');
         next();
     },
     swaggerUi.serve,
@@ -259,180 +236,57 @@ app.use('/api-docs',
     })
 );
 
-// Simple API docs sebagai fallback
-app.get('/docs', (req, res) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+// Simplified auto-auth endpoint
+app.get('/swagger-auto-auth', (req, res) => {
+    res.setHeader('Content-Type', 'text/html');
     res.send(`
     <!DOCTYPE html>
     <html>
     <head>
+        <title>📱 Habit Tracker API</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>📱 Habit Tracker API</title>
         <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.6; background: #f8f9fa; }
-            .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 20px; text-align: center; border-radius: 10px; margin-bottom: 30px; }
-            .section { background: white; padding: 30px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .endpoint { background: #f8f9fa; padding: 15px; margin: 10px 0; border-left: 4px solid #007acc; border-radius: 4px; }
-            .method { display: inline-block; padding: 4px 8px; color: white; font-weight: bold; border-radius: 3px; font-size: 12px; }
-            .method-get { background: #28a745; }
-            .method-post { background: #007bff; }
-            .method-put { background: #fd7e14; }
-            .method-delete { background: #dc3545; }
-            .url { font-family: monospace; font-weight: bold; margin-left: 10px; }
-            code { background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
-            pre { background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 5px; overflow-x: auto; }
-            .btn { display: inline-block; padding: 12px 24px; background: #007acc; color: white; text-decoration: none; border-radius: 6px; margin: 10px 10px 10px 0; transition: background 0.3s; }
-            .btn:hover { background: #005a99; }
+            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+            .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .banner { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px; }
+            .btn { display: inline-block; padding: 12px 24px; background: #49cc90; color: white; text-decoration: none; border-radius: 6px; margin: 10px; }
+            .btn:hover { background: #3ea173; }
+            .section { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 6px; }
+            code { background: #e9ecef; padding: 2px 6px; border-radius: 3px; }
         </style>
     </head>
     <body>
         <div class="container">
-            <div class="header">
+            <div class="banner">
                 <h1>📱 Habit Tracker API</h1>
-                <p>Complete REST API for habit tracking mobile applications</p>
-                <div style="margin-top: 20px;">
-                    <a href="/api-docs" class="btn">🔗 Try Swagger UI</a>
-                    <a href="/health" class="btn">💖 Health Check</a>
-                </div>
+                <p>Complete API documentation for mobile developers</p>
             </div>
-
+            
             <div class="section">
-                <h2>🔑 Authentication</h2>
-                <p>All API requests (except auth endpoints) require JWT token in Authorization header:</p>
-                <pre>Authorization: Bearer {your_jwt_token}</pre>
-                
-                <div class="endpoint">
-                    <span class="method method-post">POST</span>
-                    <span class="url">/api/auth/register</span>
-                    <p>Register new user. Returns JWT token.</p>
-                    <pre>{"name": "John Doe", "email": "test@example.com", "password": "password123"}</pre>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-post">POST</span>
-                    <span class="url">/api/auth/login</span>
-                    <p>Login user. Returns JWT token.</p>
-                    <pre>{"email": "test@example.com", "password": "password123"}</pre>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-get">GET</span>
-                    <span class="url">/api/auth/profile</span>
-                    <p>Get current user profile (requires auth)</p>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-put">PUT</span>
-                    <span class="url">/api/auth/profile</span>
-                    <p>Update user profile (requires auth)</p>
-                    <pre>{"name": "Updated Name"}</pre>
-                </div>
+                <h2>🚀 API Documentation</h2>
+                <p>Access interactive API documentation:</p>
+                <a href="/api-docs" class="btn">📚 Open Swagger UI</a>
+                <a href="/health" class="btn">💖 Health Check</a>
             </div>
-
+            
             <div class="section">
-                <h2>📂 Categories</h2>
-                <div class="endpoint">
-                    <span class="method method-get">GET</span>
-                    <span class="url">/api/categories</span>
-                    <p>Get all habit categories (requires auth)</p>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>📝 Habits</h2>
-                <div class="endpoint">
-                    <span class="method method-post">POST</span>
-                    <span class="url">/api/habits</span>
-                    <p>Create new habit (requires auth)</p>
-                    <pre>{"name": "Morning Exercise", "description": "30min workout", "category_id": 2, "frequency_type": "daily", "target_count": 1}</pre>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-get">GET</span>
-                    <span class="url">/api/habits</span>
-                    <p>Get user habits with filters (requires auth)</p>
-                    <p>Query params: <code>page</code>, <code>limit</code>, <code>category_id</code>, <code>frequency_type</code>, <code>is_active</code></p>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-get">GET</span>
-                    <span class="url">/api/habits/:id</span>
-                    <p>Get specific habit (requires auth)</p>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-put">PUT</span>
-                    <span class="url">/api/habits/:id</span>
-                    <p>Update habit (requires auth)</p>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-delete">DELETE</span>
-                    <span class="url">/api/habits/:id</span>
-                    <p>Delete habit (requires auth)</p>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-get">GET</span>
-                    <span class="url">/api/habits/statistics</span>
-                    <p>Get habit statistics (requires auth)</p>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>✅ Logs</h2>
-                <div class="endpoint">
-                    <span class="method method-post">POST</span>
-                    <span class="url">/api/logs</span>
-                    <p>Log habit completion (requires auth)</p>
-                    <pre>{"habit_id": 1, "date": "2026-01-18", "completed": true, "notes": "Great workout!"}</pre>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-get">GET</span>
-                    <span class="url">/api/logs</span>
-                    <p>Get habit logs (requires auth)</p>
-                    <p>Query params: <code>start_date</code>, <code>end_date</code>, <code>habit_id</code></p>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-get">GET</span>
-                    <span class="url">/api/logs/today</span>
-                    <p>Get today's habit status (requires auth)</p>
-                </div>
-
-                <div class="endpoint">
-                    <span class="method method-get">GET</span>
-                    <span class="url">/api/logs/calendar</span>
-                    <p>Get calendar view of habits (requires auth)</p>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>🔗 Base URLs</h2>
+                <h2>🔗 Endpoints</h2>
                 <ul>
-                    <li><strong>Production:</strong> <code>https://traxer-three.vercel.app</code></li>
-                    <li><strong>Health Check:</strong> <code>GET /health</code></li>
+                    <li><strong>Authentication:</strong> <code>/api/auth</code></li>
+                    <li><strong>Categories:</strong> <code>/api/categories</code></li>
+                    <li><strong>Habits:</strong> <code>/api/habits</code></li>
+                    <li><strong>Logs:</strong> <code>/api/logs</code></li>
                 </ul>
             </div>
-
+            
             <div class="section">
-                <h2>📱 Response Format</h2>
-                <p>All responses follow this structure:</p>
-                <pre>{
-  "success": true,
-  "message": "Operation successful", 
-  "data": { ... }
-}</pre>
-                <p><strong>Error responses:</strong></p>
-                <pre>{
-  "success": false,
-  "message": "Error description",
-  "details": "Additional error info"
-}</pre>
+                <h2>🔑 Authentication Flow</h2>
+                <ol>
+                    <li>Register: <code>POST /api/auth/register</code></li>
+                    <li>Login: <code>POST /api/auth/login</code></li>
+                    <li>Use token in Authorization header: <code>Bearer {token}</code></li>
+                </ol>
             </div>
         </div>
     </body>
